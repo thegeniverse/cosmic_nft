@@ -1,0 +1,6 @@
+geniverse==0.1.8
+upscaler==0.0.6
+https://github.com/thegeniverse/taming/archive/master.zip
+https://github.com/thegeniverse/clip/archive/main.zip
+https://github.com/thegeniverse/glide/archive/main.zip
+-f https://download.pytorch.org/whl/cu113/torch_stable.html torch==1.10.2+cu113 torchvision==0.11.3+cu113
