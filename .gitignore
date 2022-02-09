@@ -2,3 +2,5 @@
 
 results
 !results/.keep
+
+__pycache__

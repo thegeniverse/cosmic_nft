@@ -189,6 +189,49 @@ class CosmicNFT:
             torchvision.transforms.ToPILImage()(gen_img[0]).save(
                 f"results/{prompt}.png", )
 
+    def generate_nfts_from_prompt(
+        self,
+        prompt_list: str = "",
+        num_nfts: int = 10,
+        cond_img: Image.Image = None,
+    ) -> List[Image.Image]:
+        if cond_img is None:
+            cond_img = Image.open("cosmic.png")
+
+        cond_img = torchvision.transforms.PILToTensor()(cond_img, )[None, :]
+        cond_img = (cond_img / 255.) * 2 - 1
+
+        prompt_weight_list = [1 for _ in range(len(prompt_list))]
+
+        nft_list = []
+        for _ in range(num_nfts):
+            for _params_idx, auto_params in enumerate(self.param_dict_list):
+                gen_img, _latents = self.optimize(
+                    prompt_list=prompt_list,
+                    prompt_weight_list=prompt_weight_list,
+                    num_iterations=auto_params["num_iterations"],
+                    resolution=auto_params["resolution"],
+                    cond_img=cond_img,
+                    device="cuda",
+                    lr=auto_params["lr"],
+                    loss_type="spherical_distance",
+                    num_augmentations=256,
+                    aug_noise_factor=0.11,
+                    num_accum_steps=4,
+                    init_step=0,
+                    do_upscale=auto_params["do_upscale"],
+                )
+
+            gen_img = self.upscaler.upscale(gen_img, )
+
+            gen_img_pil = torchvision.transforms.ToPILImage()(gen_img[0])
+
+            nft_list.append(gen_img_pil, )
+
+            gen_img_pil.save(f"results/{'_'.join(prompt_list)}.png", )
+
+        return nft_list
+
 
 if __name__ == "__main__":
     cosmic_nft = CosmicNFT()
