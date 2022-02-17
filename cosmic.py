@@ -33,16 +33,23 @@ class CosmicNFT:
 
         self.auto_param_dict_list = [
             {
-                "resolution": (400, 400),
+                "resolution": (256, 256),
                 "lr": 0.3,
                 "num_iterations": 30,
                 "do_upscale": False,
-                "num_crops": 64,
+                "num_crops": 128,
             },
             {
-                "resolution": (900, 900),
-                "lr": 0.2,
+                "resolution": (512, 512),
+                "lr": 0.15,
                 "num_iterations": 20,
+                "do_upscale": False,
+                "num_crops": 128,
+            },
+            {
+                "resolution": (640, 640),
+                "lr": 0.08,
+                "num_iterations": 10,
                 "do_upscale": True,
                 "num_crops": 64,
             },
@@ -107,6 +114,10 @@ class CosmicNFT:
             mask,
             img_resolution,
             mode="bilinear",
+        )
+        mask = torchvision.transforms.functional.gaussian_blur(
+            img=mask,
+            kernel_size=[10, 10],
         )
 
         latents = self.generator.get_latents_from_img(cond_img, )
