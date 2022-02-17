@@ -317,7 +317,7 @@ class CosmicNFT:
                     do_upscale=auto_params["do_upscale"],
                     results_dir=results_dir,
                 )
-                init_step += param_dict_list["num_iterations"]
+                init_step += auto_params["num_iterations"]
 
             gen_img_pil = torchvision.transforms.ToPILImage()(gen_img[0])
 
