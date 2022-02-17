@@ -117,7 +117,7 @@ class CosmicNFT:
         )
         mask = torchvision.transforms.functional.gaussian_blur(
             img=mask,
-            kernel_size=[10, 10],
+            kernel_size=[7, 7],
         )
 
         latents = self.generator.get_latents_from_img(cond_img, )
