@@ -34,15 +34,15 @@ class CosmicNFT:
         self.auto_param_dict_list = [
             {
                 "resolution": (256, 256),
-                "lr": 0.3,
+                "lr": 0.08,
                 "num_iterations": 30,
                 "do_upscale": False,
                 "num_crops": 128,
             },
             {
                 "resolution": (512, 512),
-                "lr": 0.15,
-                "num_iterations": 20,
+                "lr": 0.08,
+                "num_iterations": 10,
                 "do_upscale": False,
                 "num_crops": 128,
             },
