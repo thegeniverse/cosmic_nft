@@ -83,12 +83,13 @@ class CosmicNFT:
         cond_img = cond_img.to(device, )
         cond_img_size = cond_img.shape[2::]
         scale = (max(resolution)) / max(cond_img_size)
-        if scale != 1:
-            img_resolution = [
-                int((cond_img_size[0] * scale) // 16 * 16),
-                int((cond_img_size[1] * scale) // 16 * 16)
-            ]
 
+        img_resolution = [
+            int((cond_img_size[0] * scale) // 16 * 16),
+            int((cond_img_size[1] * scale) // 16 * 16)
+        ]
+
+        if scale != 1:
             cond_img = torch.nn.functional.interpolate(
                 cond_img,
                 img_resolution,
@@ -96,7 +97,17 @@ class CosmicNFT:
             )
 
         norm_cond_img = cond_img * 2 - 1
+        norm_cond_img = torch.nn.functional.interpolate(
+            cond_img,
+            (128, 128),
+            mode="bilinear",
+        )
         mask = self.u2net.get_img_mask(norm_cond_img, ).detach().clone()
+        mask = torch.nn.functional.interpolate(
+            mask,
+            img_resolution,
+            mode="bilinear",
+        )
 
         latents = self.generator.get_latents_from_img(cond_img, )
 
