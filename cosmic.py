@@ -7,6 +7,7 @@ import torchvision
 from PIL import Image
 from upscaler.models import ESRGAN, ESRGANConfig
 from geniverse.models import TamingDecoder
+from geniverse_hub import hub_utils
 
 
 class CosmicNFT:
@@ -30,20 +31,24 @@ class CosmicNFT:
 
         self.upscaler = ESRGAN(esrgan_config, )
 
-        self.param_dict_list = [
+        self.auto_param_dict_list = [
             {
                 "resolution": (400, 400),
                 "lr": 0.3,
                 "num_iterations": 30,
                 "do_upscale": False,
+                "num_crops": 64,
             },
             {
                 "resolution": (900, 900),
                 "lr": 0.2,
                 "num_iterations": 20,
                 "do_upscale": True,
+                "num_crops": 64,
             },
         ]
+
+        self.u2net = hub_utils.load_from_hub("u2net")
 
     def optimize(
         self,
@@ -72,12 +77,13 @@ class CosmicNFT:
             f"{loss_type} not recognized. " f"Only " \
             f"{' or '.join(self.generator.supported_loss_types)} supported."
 
+        cond_img = cond_img.to(device, )
         cond_img_size = cond_img.shape[2::]
-        scale = (max(resolution) // 16 * 16) / max(cond_img_size)
+        scale = (max(resolution)) / max(cond_img_size)
         if scale != 1:
             img_resolution = [
-                int(cond_img_size[0] * scale),
-                int(cond_img_size[1] * scale)
+                int((cond_img_size[0] * scale) // 16 * 16),
+                int((cond_img_size[1] * scale) // 16 * 16)
             ]
 
             cond_img = torch.nn.functional.interpolate(
@@ -85,6 +91,8 @@ class CosmicNFT:
                 img_resolution,
                 mode="bilinear",
             )
+
+        mask = self.u2net.get_img_mask(cond_img, ).detach().clone()
 
         latents = self.generator.get_latents_from_img(cond_img, )
 
@@ -108,6 +116,23 @@ class CosmicNFT:
 
                 img_rec = self.generator.get_img_from_latents(latents, )
 
+                def scale_grad(grad, ):
+                    grad_size = grad.shape[2:4]
+
+                    grad_mask = torch.nn.functional.interpolate(
+                        mask,
+                        grad_size,
+                        mode="nearest",
+                    )
+
+                    grad.data = grad.data * grad_mask
+
+                    return grad
+
+                img_rec_hook = latents.register_hook(scale_grad, )
+
+                img_rec = img_rec * mask + cond_img * (1 - mask)
+
                 x_rec_stacked = self.generator.augment(
                     img_rec,
                     num_crops=num_augmentations,
@@ -117,8 +142,23 @@ class CosmicNFT:
                 img_logits_list = self.generator.get_clip_img_encodings(
                     x_rec_stacked, )
 
+                with torch.no_grad():
+                    cond_img_stacked = self.generator.augment(
+                        cond_img,
+                        num_crops=num_augmentations,
+                        noise_factor=aug_noise_factor,
+                    ).detach().clone()
+
+                loss += -10 * torch.cosine_similarity(
+                    x_rec_stacked,
+                    cond_img_stacked,
+                ).mean()
+
                 for prompt, prompt_weight in zip(prompt_list,
                                                  prompt_weight_list):
+                    torchvision.transforms.ToPILImage()(mask[0]).save(
+                        f"results/{prompt}_mask.png", )
+
                     text_logits_list = self.generator.get_clip_text_encodings(
                         prompt, )
 
@@ -139,9 +179,13 @@ class CosmicNFT:
 
             optimizer.step()
             optimizer.zero_grad()
+            img_rec_hook.remove()
 
             torch.cuda.empty_cache()
             gc.collect()
+
+        if do_upscale:
+            img_rec = self.upscaler.upscale(img_rec, )
 
         return img_rec, latents
 
@@ -167,7 +211,8 @@ class CosmicNFT:
                 prompt,
             ]
 
-            for _params_idx, auto_params in enumerate(self.param_dict_list):
+            for _params_idx, auto_params in enumerate(
+                    self.auto_param_dict_list):
                 gen_img, latents = self.optimize(
                     prompt_list=prompt_list,
                     prompt_weight_list=prompt_weight_list,
@@ -194,6 +239,8 @@ class CosmicNFT:
         prompt_list: str = "",
         num_nfts: int = 10,
         cond_img: Image.Image = None,
+        auto: bool = True,
+        param_dict: Dict[str, Any, ] = None,
     ) -> List[Image.Image]:
         if cond_img is None:
             cond_img = Image.open("cosmic.png")
@@ -203,9 +250,16 @@ class CosmicNFT:
 
         prompt_weight_list = [1 for _ in range(len(prompt_list))]
 
+        if auto or param_dict is None:
+            param_dict_list = self.auto_param_dict_list
+        else:
+            param_dict_list = [
+                param_dict,
+            ]
+
         nft_list = []
         for _ in range(num_nfts):
-            for _params_idx, auto_params in enumerate(self.param_dict_list):
+            for _params_idx, auto_params in enumerate(param_dict_list):
                 gen_img, _latents = self.optimize(
                     prompt_list=prompt_list,
                     prompt_weight_list=prompt_weight_list,
@@ -214,15 +268,13 @@ class CosmicNFT:
                     cond_img=cond_img,
                     device="cuda",
                     lr=auto_params["lr"],
-                    loss_type="spherical_distance",
-                    num_augmentations=256,
+                    loss_type="cosine_similarity",
+                    num_augmentations=auto_params["num_crops"],
                     aug_noise_factor=0.11,
                     num_accum_steps=4,
                     init_step=0,
                     do_upscale=auto_params["do_upscale"],
                 )
-
-            gen_img = self.upscaler.upscale(gen_img, )
 
             gen_img_pil = torchvision.transforms.ToPILImage()(gen_img[0])
 
