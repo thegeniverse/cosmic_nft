@@ -318,6 +318,7 @@ class CosmicNFT:
                     results_dir=results_dir,
                 )
                 init_step += auto_params["num_iterations"]
+                cond_img = gen_img
 
             gen_img_pil = torchvision.transforms.ToPILImage()(gen_img[0])
 
