@@ -320,7 +320,7 @@ class CosmicNFT:
                 init_step += auto_params["num_iterations"]
                 cond_img = gen_img.detach().clone() * 255
 
-            gen_img_pil = torchvision.transforms.ToPILImage()(gen_img[0])
+            gen_img_pil = torchvision.transforms.ToPILImage()(gen_img[0] * 255)
 
             nft_list.append(gen_img_pil, )
 
