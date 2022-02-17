@@ -77,6 +77,9 @@ class CosmicNFT:
             f"{loss_type} not recognized. " f"Only " \
             f"{' or '.join(self.generator.supported_loss_types)} supported."
 
+        if cond_img.max() > 1:
+            cond_img = cond_img / 255.
+
         cond_img = cond_img.to(device, )
         cond_img_size = cond_img.shape[2::]
         scale = (max(resolution)) / max(cond_img_size)
@@ -92,7 +95,8 @@ class CosmicNFT:
                 mode="bilinear",
             )
 
-        mask = self.u2net.get_img_mask(cond_img, ).detach().clone()
+        norm_cond_img = cond_img * 2 - 1
+        mask = self.u2net.get_img_mask(norm_cond_img, ).detach().clone()
 
         latents = self.generator.get_latents_from_img(cond_img, )
 
@@ -195,7 +199,6 @@ class CosmicNFT:
     ):
         cond_img = torchvision.transforms.PILToTensor()(
             Image.open("cosmic.png"))[None, :]
-        cond_img = (cond_img / 255.) * 2 - 1
 
         with open("cosmic.txt", "r") as f:
             prompt_list = f.readlines()
@@ -246,7 +249,6 @@ class CosmicNFT:
             cond_img = Image.open("cosmic.png")
 
         cond_img = torchvision.transforms.PILToTensor()(cond_img, )[None, :]
-        cond_img = (cond_img / 255.) * 2 - 1
 
         prompt_weight_list = [1 for _ in range(len(prompt_list))]
 
