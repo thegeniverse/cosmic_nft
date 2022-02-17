@@ -38,21 +38,28 @@ class CosmicNFT:
             {
                 "resolution": (256, 256),
                 "lr": 0.1,
-                "num_iterations": 30,
+                "num_iterations": 3,
                 "do_upscale": False,
-                "num_crops": 128,
+                "num_crops": 10,
+            },
+            {
+                "resolution": (256, 256),
+                "lr": 0.1,
+                "num_iterations": 3,
+                "do_upscale": False,
+                "num_crops": 10,
             },
             {
                 "resolution": (512, 512),
                 "lr": 0.08,
-                "num_iterations": 20,
+                "num_iterations": 2,
                 "do_upscale": False,
                 "num_crops": 128,
             },
             {
                 "resolution": (640, 640),
                 "lr": 0.08,
-                "num_iterations": 20,
+                "num_iterations": 2,
                 "do_upscale": True,
                 "num_crops": 64,
             },
@@ -220,7 +227,8 @@ class CosmicNFT:
             gc.collect()
 
         if do_upscale:
-            img_rec = self.upscaler.upscale(img_rec, )
+            img_rec = self.upscaler.upscale(img_rec, ).to(
+                torch.float32, device) / 255.
 
         return img_rec, latents
 
@@ -318,9 +326,9 @@ class CosmicNFT:
                     results_dir=results_dir,
                 )
                 init_step += auto_params["num_iterations"]
-                cond_img = gen_img.detach().clone() * 255
+                cond_img = gen_img.detach().clone()
 
-            gen_img_pil = torchvision.transforms.ToPILImage()(gen_img[0] * 255)
+            gen_img_pil = torchvision.transforms.ToPILImage()(gen_img[0])
 
             nft_list.append(gen_img_pil, )
 
