@@ -99,7 +99,7 @@ class CosmicNFT:
         norm_cond_img = cond_img * 2 - 1
         norm_cond_img = torch.nn.functional.interpolate(
             cond_img,
-            (128, 128),
+            (200, 200),
             mode="bilinear",
         )
         mask = self.u2net.get_img_mask(norm_cond_img, ).detach().clone()
@@ -157,17 +157,17 @@ class CosmicNFT:
                 img_logits_list = self.generator.get_clip_img_encodings(
                     x_rec_stacked, )
 
-                with torch.no_grad():
-                    cond_img_stacked = self.generator.augment(
-                        cond_img,
-                        num_crops=num_augmentations,
-                        noise_factor=aug_noise_factor,
-                    ).detach().clone()
+                # with torch.no_grad():
+                #     cond_img_stacked = self.generator.augment(
+                #         cond_img,
+                #         num_crops=num_augmentations,
+                #         noise_factor=aug_noise_factor,
+                #     ).detach().clone()
 
-                loss += -10 * torch.cosine_similarity(
-                    x_rec_stacked,
-                    cond_img_stacked,
-                ).mean()
+                # loss += -10 * torch.cosine_similarity(
+                #     x_rec_stacked,
+                #     cond_img_stacked,
+                # ).mean()
 
                 for prompt, prompt_weight in zip(prompt_list,
                                                  prompt_weight_list):
