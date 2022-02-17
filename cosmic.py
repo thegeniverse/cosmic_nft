@@ -36,16 +36,16 @@ class CosmicNFT:
 
         self.auto_param_dict_list = [
             {
-                "resolution": (256, 256),
-                "lr": 0.05,
-                "num_iterations": 30,
+                "resolution": (512, 512),
+                "lr": 0.15,
+                "num_iterations": 10,
                 "do_upscale": False,
                 "num_crops": 128,
             },
             {
                 "resolution": (512, 512),
                 "lr": 0.08,
-                "num_iterations": 20,
+                "num_iterations": 30,
                 "do_upscale": False,
                 "num_crops": 128,
             },
@@ -54,7 +54,7 @@ class CosmicNFT:
                 "lr": 0.08,
                 "num_iterations": 20,
                 "do_upscale": True,
-                "num_crops": 64,
+                "num_crops": 128,
             },
         ]
 
@@ -220,8 +220,10 @@ class CosmicNFT:
             gc.collect()
 
         if do_upscale:
-            img_rec = self.upscaler.upscale(img_rec, ).to(
-                torch.float32, device) / 255.
+            img_rec = self.upscaler.upscale(img_rec, )
+            print("IMG RECCCCCC", img_rec.max(), img_rec.min())
+            torchvision.transforms.ToPILImage(mode='RGB')(
+                                            img_rec[0], ).save("results/wtf.png")
 
         return img_rec, latents
 
@@ -302,6 +304,7 @@ class CosmicNFT:
         for _ in range(num_nfts):
             init_step = 0
             for params_idx, auto_params in enumerate(param_dict_list):
+                print("CONDDDD", cond_img.shape, cond_img.min(), cond_img.max())
                 gen_img, _latents = self.optimize(
                     prompt_list=prompt_list,
                     prompt_weight_list=prompt_weight_list,
@@ -319,9 +322,9 @@ class CosmicNFT:
                     results_dir=results_dir,
                 )
                 init_step += auto_params["num_iterations"]
-                cond_img = gen_img.detach().clone()
+                cond_img = (gen_img * 255.).to(torch.uint8).detach().clone()
 
-            gen_img_pil = torchvision.transforms.ToPILImage()(gen_img[0])
+            gen_img_pil = torchvision.transforms.ToPILImage(mode="RGB")(gen_img[0],)
 
             nft_list.append(gen_img_pil, )
 
@@ -329,7 +332,7 @@ class CosmicNFT:
 
             fps = 10
             cmd = ("ffmpeg -y "
-                   "-r 8 "
+                   "-r 16 "
                    f"-pattern_type glob -i '{results_dir}/0*.png' "
                    "-vcodec libx264 "
                    f"-crf {fps} "
