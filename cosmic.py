@@ -161,7 +161,7 @@ class CosmicNFT:
 
                     return grad
 
-                # img_rec_hook = latents.register_hook(scale_grad, )
+                img_rec_hook = latents.register_hook(scale_grad, )
 
                 img_rec = img_rec * mask + cond_img * (1 - mask)
                 if step == 0:
@@ -214,7 +214,7 @@ class CosmicNFT:
 
             optimizer.step()
             optimizer.zero_grad()
-            # img_rec_hook.remove()
+            img_rec_hook.remove()
 
             torch.cuda.empty_cache()
             gc.collect()
@@ -299,7 +299,8 @@ class CosmicNFT:
 
         nft_list = []
         for _ in range(num_nfts):
-            for _params_idx, auto_params in enumerate(param_dict_list):
+            init_step = 0
+            for params_idx, auto_params in enumerate(param_dict_list):
                 gen_img, _latents = self.optimize(
                     prompt_list=prompt_list,
                     prompt_weight_list=prompt_weight_list,
@@ -312,10 +313,11 @@ class CosmicNFT:
                     num_augmentations=auto_params["num_crops"],
                     aug_noise_factor=0.11,
                     num_accum_steps=4,
-                    init_step=0,
+                    init_step=init_step,
                     do_upscale=auto_params["do_upscale"],
                     results_dir=results_dir,
                 )
+                init_step += param_dict_list["num_iterations"]
 
             gen_img_pil = torchvision.transforms.ToPILImage()(gen_img[0])
 
