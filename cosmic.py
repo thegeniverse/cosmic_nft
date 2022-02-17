@@ -1,6 +1,9 @@
+import os
 import gc
 import logging
+import subprocess
 from typing import *
+from datetime import datetime
 
 import torch
 import torchvision
@@ -72,6 +75,7 @@ class CosmicNFT:
         num_accum_steps: int = 8,
         init_step: int = 0,
         do_upscale: bool = False,
+        results_dir: str = "results",
     ):
         num_augmentations = max(1, int(num_augmentations / num_accum_steps))
 
@@ -119,6 +123,8 @@ class CosmicNFT:
             img=mask,
             kernel_size=[11, 11],
         )
+        torchvision.transforms.ToPILImage()(mask[0]).save(
+            f"{results_dir}/mask.png", )
 
         latents = self.generator.get_latents_from_img(cond_img, )
 
@@ -158,6 +164,12 @@ class CosmicNFT:
                 # img_rec_hook = latents.register_hook(scale_grad, )
 
                 img_rec = img_rec * mask + cond_img * (1 - mask)
+                if step == 0:
+                    torchvision.transforms.ToPILImage()(cond_img[0]).save(
+                        f"{results_dir}/{step:04d}.png", )
+
+                torchvision.transforms.ToPILImage()(img_rec[0]).save(
+                    f"{results_dir}/{(step+1):04d}.png", )
 
                 x_rec_stacked = self.generator.augment(
                     img_rec,
@@ -182,9 +194,6 @@ class CosmicNFT:
 
                 for prompt, prompt_weight in zip(prompt_list,
                                                  prompt_weight_list):
-                    torchvision.transforms.ToPILImage()(mask[0]).save(
-                        f"results/{prompt}_mask.png", )
-
                     text_logits_list = self.generator.get_clip_text_encodings(
                         prompt, )
 
@@ -267,6 +276,13 @@ class CosmicNFT:
         auto: bool = True,
         param_dict: Dict[str, Any, ] = None,
     ) -> List[Image.Image]:
+        filename = f"{'-'.join(['_'.join(prompt.split()) for prompt in prompt_list], )}-{'_'.join(str(datetime.now()).split())}"
+        results_dir = os.path.join("results", filename)
+        os.makedirs(
+            results_dir,
+            exist_ok=True,
+        )
+
         if cond_img is None:
             cond_img = Image.open("cosmic.png")
 
@@ -298,13 +314,26 @@ class CosmicNFT:
                     num_accum_steps=4,
                     init_step=0,
                     do_upscale=auto_params["do_upscale"],
+                    results_dir=results_dir,
                 )
 
             gen_img_pil = torchvision.transforms.ToPILImage()(gen_img[0])
 
             nft_list.append(gen_img_pil, )
 
-            gen_img_pil.save(f"results/{'_'.join(prompt_list)}.png", )
+            gen_img_pil.save(f"results/{filename}.png", )
+
+            fps = 10
+            cmd = ("ffmpeg -y "
+                   "-r 8 "
+                   f"-pattern_type glob -i '{results_dir}/0*.png' "
+                   "-vcodec libx264 "
+                   f"-crf {fps} "
+                   "-pix_fmt yuv420p "
+                   "-vf 'pad=ceil(iw/2)*2:ceil(ih/2)*2' "
+                   f"results/{filename}.mp4;")
+
+            subprocess.check_call(cmd, shell=True)
 
         return nft_list
 
