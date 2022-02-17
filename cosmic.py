@@ -117,7 +117,7 @@ class CosmicNFT:
         )
         mask = torchvision.transforms.functional.gaussian_blur(
             img=mask,
-            kernel_size=[7, 7],
+            kernel_size=[11, 11],
         )
 
         latents = self.generator.get_latents_from_img(cond_img, )
@@ -155,7 +155,7 @@ class CosmicNFT:
 
                     return grad
 
-                img_rec_hook = latents.register_hook(scale_grad, )
+                # img_rec_hook = latents.register_hook(scale_grad, )
 
                 img_rec = img_rec * mask + cond_img * (1 - mask)
 
@@ -205,7 +205,7 @@ class CosmicNFT:
 
             optimizer.step()
             optimizer.zero_grad()
-            img_rec_hook.remove()
+            # img_rec_hook.remove()
 
             torch.cuda.empty_cache()
             gc.collect()
