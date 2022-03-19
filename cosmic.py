@@ -38,23 +38,29 @@ class CosmicNFT:
             {
                 "resolution": (512, 512),
                 "lr": 0.15,
-                "num_iterations": 10,
+                "num_iterations": 16,
                 "do_upscale": False,
                 "num_crops": 128,
+                "mask": True,
+                "mask_thold": 0.15,
             },
             {
                 "resolution": (512, 512),
                 "lr": 0.08,
-                "num_iterations": 30,
+                "num_iterations": 32,
                 "do_upscale": False,
                 "num_crops": 128,
+                "mask": True,
+                "mask_thold": 0.15,
             },
             {
-                "resolution": (640, 640),
-                "lr": 0.08,
-                "num_iterations": 20,
+                "resolution": (512, 512),
+                "lr": 0.05,
+                "num_iterations": 32,
                 "do_upscale": True,
                 "num_crops": 128,
+                "mask": True,
+                "mask_thold": 0.15,
             },
         ]
 
@@ -76,6 +82,8 @@ class CosmicNFT:
         init_step: int = 0,
         do_upscale: bool = False,
         results_dir: str = "results",
+        do_mask: bool = False,
+        mask_thold: float = 0.15,
     ):
         num_augmentations = max(1, int(num_augmentations / num_accum_steps))
 
@@ -108,25 +116,70 @@ class CosmicNFT:
             )
 
         norm_cond_img = cond_img * 2 - 1
-        norm_cond_img = torch.nn.functional.interpolate(
-            cond_img,
-            (200, 200),
-            mode="bilinear",
-        )
-        mask = self.u2net.get_img_mask(norm_cond_img, ).detach().clone()
-        mask = torch.nn.functional.interpolate(
-            mask,
-            img_resolution,
-            mode="bilinear",
-        )
-        mask = torchvision.transforms.functional.gaussian_blur(
-            img=mask,
-            kernel_size=[11, 11],
-        )
+
+        if do_mask:
+            mask_resolution_list = [
+                (128,128),
+                (256,256),
+                (512,512),
+            ]
+            mask_mean_list = []
+            mask_list = []
+
+            for mask_resolution in mask_resolution_list:
+                norm_cond_img = torch.nn.functional.interpolate(
+                    cond_img,
+                    mask_resolution,
+                    mode="bilinear",
+                )
+
+                mask = self.u2net.get_img_mask(norm_cond_img, ).detach().clone()
+                mask = torch.nn.functional.interpolate(
+                    mask,
+                    img_resolution,
+                    mode="bilinear",
+                )
+
+                mask_list.append(mask)
+                mask_mean_list.append(mask.mean())
+
+                print("MASSSK", mask.mean())
+
+
+            max_mean = max(mask_mean_list)
+            print(f"MAX MEAN {max_mean}")
+            print(f"MASK THOLD {mask_thold}")
+            if max_mean > mask_thold:
+                mask_idx = mask_mean_list.index(max_mean)
+                mask = mask_list[mask_idx]
+
+            else:
+                mask = torch.ones_like(mask)
+            
+            mask /= mask.max()
+            #mask += (1-mask.mean())
+            #mask = torch.clip(mask, 0, 1)
+
+        else:
+            print("NOT MASKING")
+            mask = torch.ones(img_resolution).to(device)[None, None, :, :]
+
+        torchvision.transforms.ToPILImage()(mask[0]).save(
+            f"{results_dir}/pre-mask.png", )
+
+
+
+        #mask = torchvision.transforms.functional.gaussian_blur(
+        #    img=mask,
+        #    kernel_size=[11, 11],
+        #)
         torchvision.transforms.ToPILImage()(mask[0]).save(
             f"{results_dir}/mask.png", )
 
+
         latents = self.generator.get_latents_from_img(cond_img, )
+
+        init_latents = latents.detach().clone()
 
         latents = latents.to(device)
         latents = torch.nn.Parameter(latents)
@@ -180,17 +233,15 @@ class CosmicNFT:
                 img_logits_list = self.generator.get_clip_img_encodings(
                     x_rec_stacked, )
 
-                # with torch.no_grad():
-                #     cond_img_stacked = self.generator.augment(
+                #with torch.no_grad():
+                #    cond_img_stacked = self.generator.augment(
                 #         cond_img,
                 #         num_crops=num_augmentations,
                 #         noise_factor=aug_noise_factor,
                 #     ).detach().clone()
 
-                # loss += -10 * torch.cosine_similarity(
-                #     x_rec_stacked,
-                #     cond_img_stacked,
-                # ).mean()
+                #loss += -10*torch.cosine_similarity(img_rec, cond_img).mean()
+                #print("rec loss", loss)
 
                 for prompt, prompt_weight in zip(prompt_list,
                                                  prompt_weight_list):
@@ -201,8 +252,11 @@ class CosmicNFT:
                                                        text_logits_list):
                         text_logits = text_logits.clone().detach()
                         if loss_type == 'cosine_similarity':
-                            clip_loss = -10 * torch.cosine_similarity(
+                            clip_loss = 0
+                            clip_loss += -10 * torch.cosine_similarity(
                                 text_logits, img_logits).mean()
+                            clip_loss += -10 * torch.cosine_similarity(
+                                init_latents, latents).mean()
 
                         if loss_type == "spherical_distance":
                             clip_loss = (text_logits - img_logits).norm(
@@ -220,6 +274,7 @@ class CosmicNFT:
             gc.collect()
 
         if do_upscale:
+            img_rec = torch.clip(img_rec, 0, 1)
             img_rec = self.upscaler.upscale(img_rec, )
             print("IMG RECCCCCC", img_rec.max(), img_rec.min())
             torchvision.transforms.ToPILImage(mode='RGB')(
@@ -261,9 +316,11 @@ class CosmicNFT:
                     loss_type="spherical_distance",
                     num_augmentations=256,
                     aug_noise_factor=0.11,
-                    num_accum_steps=4,
+                    num_accum_steps=1,
                     init_step=0,
                     do_upscale=auto_params["do_upscale"],
+                    do_mask=auto_params["mask"],
+                    mask_thold=auto_params["mask_thold"],
                 )
 
             img_rec = self.upscaler.upscale(img_rec, )
@@ -320,6 +377,8 @@ class CosmicNFT:
                     init_step=init_step,
                     do_upscale=auto_params["do_upscale"],
                     results_dir=results_dir,
+                    do_mask=auto_params["mask"],
+                    mask_thold=auto_params["mask_thold"],
                 )
                 init_step += auto_params["num_iterations"]
                 cond_img = (gen_img * 255.).to(torch.uint8).detach().clone()

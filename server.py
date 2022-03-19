@@ -32,6 +32,7 @@ cosmic_nft = CosmicNFT()
 )
 def generate():
     try:
+        print("JSON", request.get_json())
         prompt_list = request.form.get("text").split("-")
 
         auto = request.form.get("auto")
@@ -50,6 +51,7 @@ def generate():
         if cond_img is not None:
             response = requests.get(cond_img)
             cond_img = Image.open(BytesIO(response.content)).convert("RGB")
+        
 
         if auto:
             param_dict = None
@@ -83,6 +85,18 @@ def generate():
                 num_crops = 64
             else:
                 num_crops = int(num_crops)
+        
+            mask = request.form.get("mask")
+            if mask is None:
+                mask = True
+            else:
+                mask = bool(int(mask))
+            
+            mask_thold = request.form.get("maskThold")
+            if mask_thold is None:
+                mask_thold = 0.15
+            else:
+                mask_thold = float(mask_thold)
 
             param_dict = {
                 "resolution": resolution,
@@ -90,6 +104,8 @@ def generate():
                 "num_iterations": num_iterations,
                 "do_upscale": do_upscale,
                 "num_crops": num_crops,
+                "mask": mask,
+                "mask_thold": mask_thold,
             }
 
         print("param dict", param_dict)
